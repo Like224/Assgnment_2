@@ -15,7 +15,7 @@ output:
 ```{r}
 #Use  p_load function in the pacman to install and library a load of packages that we'll use.
 library(pacman)
-p_load(bookdown, tidyverse, ggforce, flextable, latex2exp, magick, plotrix, readxl, janitor, devtools,dplyr, gridExtra, cowplot, rstatix, GGally)
+p_load(bookdown, tidyverse, ggforce, flextable, latex2exp, magick, plotrix, readxl, janitor, devtools,dplyr, gridExtra, cowplot, rstatix, GGally, metafor, DIZutils, png, MASS, emmeans, R.rsp,orchaRd, meta)
 ```
 
 ### 2.Import clark data into R, data Wrangling and generate the summary statistics for each of the fish species’ average activity for each treatment.
@@ -69,7 +69,85 @@ data_3
 ### 3.Merge the combined summary statistics and metadata into the larger meta-analysis dataset 
 ```{r}
 data_f <- rbind(data_3,meta_data)
-data_f
 ```
 
-###4. Correctly calculate the log response ratio (lnRR) effect size for every row of the dataframe using metafor’s escalc() function.1
+### 4.Correctly calculate the log response ratio (lnRR) effect size for every row of the dataframe using metafor’s escalc() function.
+
+```{r}
+#Calculate Log Response Ratio. where m1i and m2i are the observed means of the two groups, sd1i and sd2i are the observed standard deviations, and n1i and n2i denote the number of individuals in each group. Use the var.names argument to rename the effect size and sampling variance to “lnRR” and “V_lnRR”.
+rom_data <- metafor::escalc(measure = "ROM", m1i = oa.mean, m2i = ctrl.mean, sd1i = oa.sd, sd2i = ctrl.sd, n1i = oa.n, n2i = ctrl.n, data = data_f,
+    var.names = c("lnRR", "V_lnRR"))
+```
+
+### 5.Correct meta-analytic model fitted to the data that controls for the sampling variance of lnRR. The model should include a random effect of study and observation. Use metafor’s rma.mv() function.
+
+```{r}
+# Add observation level variable to rom_data.
+rom_data <- rom_data %>% mutate(residual = 1:n())  
+# Meta-analytic model
+MLMA <- metafor::rma.mv(lnRR ~ 1, V = V_lnRR, random = list( ~1| Study, ~1 | residual), data=rom_data)
+MLMA
+
+```
+
+### 6.Findings and interpretation of the above results
+
+#### Correct presentation and interpretation of overall meta-analytic mean and measures of uncertainty around the mean estimate (e.g., 95% confidence intervals).
+
+##### Overall meta-analytic mean
+```{r}
+#We can see the overall meta-analytic mean from the model by extracting the intercept.
+coef(MLMA)
+```
+
+It is estimated to be `r coef(MLMA)`, which tells us that the mean lnRR value is positive, but there is a rather weak overall association between ocean acidification and fish behavior change when we pool across all studies.
+
+##### Measures of uncertainty around the mean estimate (95% confidence intervals).
+```{r}
+str(MLMA$ci.lb)
+str(MLMA$ci.ub)
+```
+
+We can extract the 95% confidence intervals which range from `r MLMA$ci.lb` to `r MLMA$ci.ub`. 95% of the time we would expect the true mean to fall between lnRR values of ``r MLMA$ci.lb` to `r MLMA$ci.ub`.And if we were to repeat the experiment many times, 95% of the confidence intervals constructed would contain the true meta-analytic mean.
+
+##### Measures of heterogeneity in effect size estimates across studies 
+```{r,het,tab.cap = "Total effect size hetereogneity, as well as the proportion of hetereogeneity in effects resulting from Study and Observational" }
+# Calculate I2
+i2_vals <- orchaRd::i2_ml(MLMA)
+
+i2 <- tibble(type = firstup(gsub("I2_", "",names(i2_vals))), I2 = i2_vals)
+flextable(i2) %>%
+    align(part = "header", align = "center") %>%
+    compose(part = "header", j = 1, value = as_paragraph(as_b("Type"))) %>%
+    compose(part = "header", j = 2, value = as_paragraph(as_b("I"), as_b(as_sup("2")),
+        as_b("(%)")))
+# Calculate the prediction intervals
+pis <- predict(MLMA)
+pis
+```
+Overall, we have highly heterogeneous effect size data because At an accuracy of five decimal places, sampling changes barely affect the change in total effect. The $I_{Total}^2$ is `r i2[1, "I2"]`
+
+Our 95% prediction intervals are wide. Effect sizes (lnRR) are expected to range from `r  pis$pi.lb` to `r pis$pi.ub` 95% of the time with repeated experiments, suggesting a lot of inconsistency between studies.
+
+##### Forest plot showing the mean estimate, 95% confidence interval, and prediction interval
+
+```{r fig.cap= "Orchard plot showing the mean estimate, 95% confidence interval, and prediction interval, k = the number of effect sizes and the number of studies are in brackets. The hollow dots in the middle represent mean estimate，bold lines represent  95% confidence interval, thin lines represent prediction interval, The blue circles represent individual effect sizes"}
+#use orchard plots (Improved forest plot) to show the mean estimate, 95% confidence interval, and prediction interval
+
+orchaRd::orchard_plot(MLMA, mod = "1",  group = "Study" , data = rom_data,
+    xlab = "log response ratio (lnRR)", trunk.size= 1, branch.size = 5, twig.size = 2, angle = 45)
+```
+### 7.Funnel plot for visually assessing the possibility of publication bias.
+```{r fig.cap= "Funnel plot depicting elevated CO2 relative to some control on fish behaviour as a function of precision (1 / SE). The dotted lines are the theoretical 95% sampling variance intervals - the interval with which we expect effect size estimates to fall within if only sampling variance drives differences in effects. Shaded regions represent the p-value of studies. The white region indicates studies where the p-value is between 0.1 and 1; dark gray where the p-value of studies is between 0.05 and 0.1 and the lighter gray regions where the p-value of studies is significant."}
+metafor::funnel(x = rom_data$lnRR, vi= rom_data$V_lnRR, yaxis = "seinv", xlab = "Log Response Ratio (lnRR)",level = c(0.1,0.05,0.01) ,shade = c("white", "gray55", "gray 75"),
+    las = 1, ylim = c(0.1, 20), xlim = c(-4, 4),atransf= exp,  legend = TRUE)
+```
+
+### 8.Time-lag plot assessing how effect sizes may or may not have changed through time.
+
+```{r}
+ggplot(rom_data, aes(y = lnRR, x = Year..print., size = sqrt(V_lnRR))) + geom_point(alpha = 0.3) +
+    geom_smooth(method = lm, col = "red", show.legend = FALSE) + labs(x = "Publication Year",
+    y = "Log Response Ratio (lnRR)", size = "Precision (1/SE)") +
+    theme_classic()
+```
