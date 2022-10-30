@@ -77,6 +77,8 @@ data_f <- rbind(data_3,meta_data)
 #Calculate Log Response Ratio. where m1i and m2i are the observed means of the two groups, sd1i and sd2i are the observed standard deviations, and n1i and n2i denote the number of individuals in each group. Use the var.names argument to rename the effect size and sampling variance to “lnRR” and “V_lnRR”.
 rom_data <- metafor::escalc(measure = "ROM", m1i = oa.mean, m2i = ctrl.mean, sd1i = oa.sd, sd2i = ctrl.sd, n1i = oa.n, n2i = ctrl.n, data = data_f,
     var.names = c("lnRR", "V_lnRR"))
+##remove NAs
+rom_data<-na.omit(rom_data)
 ```
 
 ### 5.Correct meta-analytic model fitted to the data that controls for the sampling variance of lnRR. The model should include a random effect of study and observation. Use metafor’s rma.mv() function.
@@ -111,7 +113,7 @@ str(MLMA$ci.ub)
 We can extract the 95% confidence intervals which range from `r MLMA$ci.lb` to `r MLMA$ci.ub`. 95% of the time we would expect the true mean to fall between lnRR values of ``r MLMA$ci.lb` to `r MLMA$ci.ub`.And if we were to repeat the experiment many times, 95% of the confidence intervals constructed would contain the true meta-analytic mean.
 
 ##### Measures of heterogeneity in effect size estimates across studies 
-```{r,het,tab.cap = "Total effect size hetereogneity, as well as the proportion of hetereogeneity in effects resulting from Study and Observational" }
+```{r,tab.cap = "Total effect size hetereogneity, as well as the proportion of hetereogeneity in effects resulting from Study and Observational" }
 # Calculate I2
 i2_vals <- orchaRd::i2_ml(MLMA)
 
@@ -126,6 +128,8 @@ pis <- predict(MLMA)
 pis
 ```
 Overall, we have highly heterogeneous effect size data because At an accuracy of five decimal places, sampling changes barely affect the change in total effect. The $I_{Total}^2$ is `r i2[1, "I2"]`
+From the multilevel meta-analytic model we found that only `r i2[2, "I2"]` of the total variation in effect size estimates was due to between-study variation.
+
 
 Our 95% prediction intervals are wide. Effect sizes (lnRR) are expected to range from `r  pis$pi.lb` to `r pis$pi.ub` 95% of the time with repeated experiments, suggesting a lot of inconsistency between studies.
 
@@ -135,19 +139,45 @@ Our 95% prediction intervals are wide. Effect sizes (lnRR) are expected to range
 #use orchard plots (Improved forest plot) to show the mean estimate, 95% confidence interval, and prediction interval
 
 orchaRd::orchard_plot(MLMA, mod = "1",  group = "Study" , data = rom_data,
-    xlab = "log response ratio (lnRR)", trunk.size= 1, branch.size = 5, twig.size = 2, angle = 45)
+    xlab = "log response ratio (lnRR)", trunk.size= 0.5, branch.size = 5, twig.size = 2, angle = 45,)
 ```
 ### 7.Funnel plot for visually assessing the possibility of publication bias.
 ```{r fig.cap= "Funnel plot depicting elevated CO2 relative to some control on fish behaviour as a function of precision (1 / SE). The dotted lines are the theoretical 95% sampling variance intervals - the interval with which we expect effect size estimates to fall within if only sampling variance drives differences in effects. Shaded regions represent the p-value of studies. The white region indicates studies where the p-value is between 0.1 and 1; dark gray where the p-value of studies is between 0.05 and 0.1 and the lighter gray regions where the p-value of studies is significant."}
 metafor::funnel(x = rom_data$lnRR, vi= rom_data$V_lnRR, yaxis = "seinv", xlab = "Log Response Ratio (lnRR)",level = c(0.1,0.05,0.01) ,shade = c("white", "gray55", "gray 75"),
-    las = 1, ylim = c(0.1, 20), xlim = c(-4, 4),atransf= exp,  legend = TRUE)
+    las = 1, ylim = c(0.1, 20), xlim = c(-4, 4),  legend = TRUE)
 ```
+There is a clear gap in the lower right corner for positive correlations based on very small sample sizes, generally small to moderate positive correlations are not published.
 
+```{r fig.cap= "."}
+ggplot(rom_data, aes(y = lnRR, x= V_lnRR,)) + geom_point() + geom_smooth(method = lm) + labs(y = "Log Response Ratio (lnRR)", x = "Sampling Variance of lnRR") +  xlim(0, 20)+
+    theme_classic()
+```
 ### 8.Time-lag plot assessing how effect sizes may or may not have changed through time.
 
-```{r}
-ggplot(rom_data, aes(y = lnRR, x = Year..print., size = sqrt(V_lnRR))) + geom_point(alpha = 0.3) +
+```{r fig.cap= "Plot of lnRR as a function of Print year. Points are scaled in relation to their precision (1/sqrt(V_lnRR)). Small points indicate effects with low precision or high sampling varaince"}
+ggplot(rom_data, aes(y = lnRR, x = Year..print., size = 1/sqrt(V_lnRR))) + geom_point(alpha = 0.3) +
+    geom_smooth(method = lm, col = "red", show.legend = FALSE) + labs(x = "Print Year",
+    y = "Log Response Ratio (lnRR)", size = "Precision (1/SE)") +
+    theme_classic()
+```
+In this plot, we can see that there does seem to be a clear negative correlation between lnRR and year, but because there are several lnRR values that are too small to see the variation between precision, we filter these values out
+
+```{r fig.cap= "Plot of lnRR as a function of Print year and filter out the too-small lnRR,. Points are scaled in relation to their precision (1/sqrt(V_lnRR)). Small points indicate effects with low precision or high sampling varaince}}
+Tl_rom_data <- rom_data %>% filter(V_lnRR > 1.0e-05)
+ggplot(Tl_rom_data, aes(y = lnRR, x = Year..print., size = sqrt(1/V_lnRR))) + geom_point(alpha = 0.3) +
     geom_smooth(method = lm, col = "red", show.legend = FALSE) + labs(x = "Publication Year",
     y = "Log Response Ratio (lnRR)", size = "Precision (1/SE)") +
     theme_classic()
 ```
+
+The impact of ocean acidification studies on fish behaviour has declined. In this plot, we can see that there does seem to be a clear negative correlation between lnRR and year, which is the same conclusion we drew from the graph above. Effect size magnitudes (lnRR) in this area have been declining over the past decade, with a large number of effect size magnitudes >5 in 2010-2014 and mostly <3 after 2015. average effect size magnitudes in early studies were too large, hovering at moderate effect sizes from 2012 to 2014 and almost disappeared in recent years.These early studies appear to have a far higher effect size compared with studies that are done in later years.
+
+### 9.Formal meta-regression model that includes year as a moderator (fixed effect) to test for time-lag bias
+
+```{r}
+MLMR <- metafor::rma.mv(lnRR ~ Year..print., V = V_lnRR, random = list( ~1| Study, ~1 | residual), data=rom_data)
+MLMR
+```
+
+
+### 10.Formal meta-regression model that includes inverse sampling variance to test for file-drawer biases
