@@ -1,7 +1,6 @@
 
 ## Data, analysis script and associated files for:	
 ## Assignment #2: Meta-analysis of Ocean Acidification Effects on Behaviour
-## (Rick) Zirui Zhang u7457512
 		
 # DATA files			
 
