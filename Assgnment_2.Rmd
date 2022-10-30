@@ -267,9 +267,9 @@ The good news is that the impact of the earlier studies is declining year by yea
 
 ### Github
 
-[My GitHub Repository](https://github.com/Rick781/First-test)
+[My GitHub Repository](https://github.com/Like224/Assgnment_2)
 
-
+### Reference
 1. Yang Y, Hillebrand H, Malgorzata L, Cleasby I, Nakagawa S. Low statistical power and overestimated anthropogenic impacts, exacerbated by publication bias, dominate field studies in global change biol- ogy. EcoEvoRxiv. 2021.
 
 2. Murtaugh PA. Journal quality, effect size, and publication bias in meta-analysis. Ecology. 2002; 83:1162–6.
