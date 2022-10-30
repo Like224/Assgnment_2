@@ -1,6 +1,6 @@
 ---
 title: 'Assignment #2: Meta-analysis of Ocean Acidification Effects on Behaviour'
-author: "Zirui Zhang u7457512"
+author: "(Rick) Zirui Zhang u7457512"
 date: "20/10/2022"
 output: 
   bookdown::html_document2:
@@ -74,6 +74,7 @@ data_3
 ### 3.Merge the combined summary statistics and metadata into the larger meta-analysis dataset
 
 ```{r}
+# use rbind to combine
 data_f <- rbind(data_3,meta_data)
 ```
 
@@ -92,7 +93,7 @@ rom_data<-na.omit(rom_data)
 ```{r}
 # Add observation level variable to rom_data.
 rom_data <- rom_data %>% mutate(residual = 1:n())  
-# Meta-analytic model
+# Meta-analytic model include a random effect of study and observation.
 MLMA <- metafor::rma.mv(lnRR ~ 1, V = V_lnRR, random = list( ~1| Study, ~1 | residual), data=rom_data)
 MLMA
 
@@ -137,7 +138,7 @@ pis <- predict(MLMA)
 pis
 ```
 
-Overall, we have highly heterogeneous effect size data because At an accuracy of five decimal places, sampling changes barely affect the change in total effect. The $I_{Total}^2$ is `r i2[1, "I2"]` From the multilevel meta-analytic model we found that only `r i2[2, "I2"]` of the total variation in effect size estimates was due to between-study variation.
+Overall, the $I_{Total}^2$ is `r i2[1, "I2"]`,which means we have highly heterogeneous effect size data because At an accuracy of five decimal places, sampling changes barely affect the change in total effect. From the multilevel meta-analytic model we found that only `r i2[2, "I2"]` of the total variation in effect size estimates was due to between-study variation.
 
 Our 95% prediction intervals are wide. Effect sizes (lnRR) are expected to range from `r  pis$pi.lb` to `r pis$pi.ub` 95% of the time with repeated experiments, suggesting a lot of inconsistency between studies.
 
@@ -147,17 +148,18 @@ Our 95% prediction intervals are wide. Effect sizes (lnRR) are expected to range
 #use orchard plots (Improved forest plot) to show the mean estimate, 95% confidence interval, and prediction interval
 
 orchaRd::orchard_plot(MLMA, mod = "1",  group = "Study" , data = rom_data,
-    xlab = "log response ratio (lnRR)", trunk.size= 0.5, branch.size = 5, twig.size = 2, angle = 45,)
+    xlab = "log response ratio (lnRR)", trunk.size= 0.5, branch.size = 5, twig.size = 2, angle = 45)
 ```
 
 ### 7.Funnel plot for visually assessing the possibility of publication bias.
 
 ```{r funnel, fig.cap= "Funnel plot depicting elevated CO2 relative to some control on fish behaviour as a function of precision (1 / SE). The dotted lines are the theoretical 95% sampling variance intervals - the interval with which we expect effect size estimates to fall within if only sampling variance drives differences in effects. Shaded regions represent the p-value of studies. The white region indicates studies where the p-value is between 0.1 and 1; dark gray where the p-value of studies is between 0.05 and 0.1 and the lighter gray regions where the p-value of studies is significant."}
+#Make a funnel plot to visualize the data in relation to the precision, inverse sampling standard error.
 metafor::funnel(x = rom_data$lnRR, vi= rom_data$V_lnRR, yaxis = "seinv", xlab = "Log Response Ratio (lnRR)",level = c(0.1,0.05,0.01) ,shade = c("white", "gray55", "gray 75"),
-    las = 1, ylim = c(0.1, 40), xlim = c(-4, 4),  legend = TRUE)
+    las = 1, ylim = c(0.1, 20), xlim = c(-4, 4),  legend = TRUE)
 ```
 
-There is a clear gap in the lower right corner for positive correlations based on very small sample sizes, generally small to moderate positive correlations are not published.
+
 
 ```{r po2, fig.cap= "Plot of lnRR against sampling variance for lnRR. A linear model was fit to the data."}
 #Fitting a Multilevel Meta-Regression model to Test and Correct for Publication bias
@@ -166,7 +168,7 @@ ggplot(rom_data, aes(y = lnRR, x= V_lnRR,)) + geom_point() + geom_smooth(method 
 ```
 If we do not filter the sampling Variance of lnRR, we find two extremely large value of variance that significantly pulls down the slope, and prevented us from analyzing the distribution of the sample.
 
-```{r po, fig.cap= "Plot of lnRR against sampling variance for lnRR. A linear model was fit to the data.(X-axis is limited)"}
+```{r po, fig.cap= "Plot of lnRR against sampling variance for lnRR. A linear model was fit to the data.(X-axis is filtered)"}
 # filter the sampling Variance of lnRR，
 po_rom_data <- rom_data %>% filter(V_lnRR < 1.0e+04)
 ggplot(po_rom_data, aes(y = lnRR, x= V_lnRR,)) + geom_point() + geom_smooth(method = lm) + labs(y = "Log Response Ratio (lnRR)", x = "Sampling Variance of lnRR") +
@@ -183,9 +185,9 @@ ggplot(rom_data, aes(y = lnRR, x = Year..print., size = 1/sqrt(V_lnRR))) + geom_
     theme_classic()
 ```
 
-In this plot, we can see that there does seem to be a clear negative correlation between lnRR and year, but because there are several lnRR values that are too small to see the variation between precision, we filter these values out
+In this plot, we can see that there does seem to be a clear negative correlation between lnRR and year, but because there are several lnRR values that are too small , which produce the big point.To see the variation between precision, we filter these values out
 
-```{r TL2, fig.cap= "Plot of lnRR as a function of Print year and filter out the too-small lnRR,. Points are scaled in relation to their precision (1/sqrt(V_lnRR)). Small points indicate effects with low precision or high sampling varaince"}
+```{r TL2, fig.cap= "Plot of lnRR as a function of Print year and filter out the too-small V_lnRR,. Points are scaled in relation to their precision (1/sqrt(V_lnRR)). Small points indicate effects with low precision or high sampling varaince"}
 Tl_rom_data <- rom_data %>% filter(V_lnRR > 1.0e-05)
 ggplot(Tl_rom_data, aes(y = lnRR, x = Year..print., size = sqrt(1/V_lnRR))) + geom_point(alpha = 0.3) +
     geom_smooth(method = lm, col = "red", show.legend = FALSE) + labs(x = "Publication Year",
@@ -193,11 +195,11 @@ ggplot(Tl_rom_data, aes(y = lnRR, x = Year..print., size = sqrt(1/V_lnRR))) + ge
     theme_classic()
 ```
 
-The impact of ocean acidification studies on fish behaviour has declined. In this plot, we can see that there does seem to be a clear negative correlation between lnRR and year, which is the same conclusion we drew from the graph above. Effect size magnitudes (lnRR) in this area have been declining over the past decade, with a large number of effect size magnitudes \>5 in 2010-2014 and mostly \<3 after 2015. average effect size magnitudes in early studies were too large, hovering at moderate effect sizes from 2012 to 2014 and almost disappeared in recent years.These early studies appear to have a far higher effect size compared with studies that are done in later years.
 
 ### 9.Formal meta-regression model that includes year as a moderator (fixed effect) to test for time-lag bias
 
 ```{r}
+# Including year as moderator
 MLMY <- metafor::rma.mv(lnRR ~ Year..print., V = V_lnRR, random = list( ~1| Study, ~1 | residual), data=rom_data)
 MLMY
 r2_time <- orchaRd::r2_ml(MLMY)
@@ -214,27 +216,27 @@ r2_A
 ```
 
 
-### 11.A paragraph that discusses the potential for publication bias based on the meta-regression results. 
+### 11.A paragraph that discusses the potential for publication bias based on the meta-regression results.
 
-We can see from Fig. @ref(fig:funnel) This is a typical funnel shape. Most effects are present in the negative space. There are a lot of studies in the light grey regions that the p-value was significant. There is a clear gap in the lower right corner for positive lnRR based on very small sample sizes. Interestingly, for negative LnRR, the research of a large amount of small samples was published.However, most of these studies have large p-values.
+We can see from Fig. \@ref(fig:funnel) This is a typical funnel shape. Most effects are present in the negative space. There are a lot of studies in the light grey regions that the p-value was significant. There is a clear gap in the lower right corner for positive lnRR based on very small sample sizes. Interestingly, for negative LnRR, the research of a large amount of small samples was published.However, most of these studies have large p-values.
 
-We can see from Fig. @ref(fig:po) Here is a significant negative slope. This is because effect sizes are unevenly distributed on both sides of the funnel plot, and when the sampling variance is large, the average effect size is shifted, resulting in a slope.We can see from the linear model fit that when the sampling variance is large, the average effect size is dragged downwards.  Another point worth noting is that if we do not filter the sampling Variance of lnRR, we find two extremely large value of variance that significantly pulls down the slope.(@ref(fig:po2)), which has a great impact to the slope and distribution of effect sizes.
+We can see from Fig. \@ref(fig:po) Here is a significant negative slope. This is because effect sizes are unevenly distributed on both sides of the funnel plot, and when the sampling variance is large, the average effect size is shifted, resulting in a slope.We can see from the linear model fit that when the sampling variance is large, the average effect size is dragged downwards.  Another point worth noting is that if we do not filter the sampling Variance of lnRR, we find two extremely large value of variance that significantly pulls down the slope.(Fig. \@ref(fig:po2)), which has a great impact to the slope and distribution of effect sizes.
 
 Based on the above two points, we can get Publication bias is reflected here because there are few effects in the opposite direction, and when the sample size is small, our hypothesis does not predict that direction, so the sampling variance is large. It shows these studies are difficult to publish, or that the authors are unlikely to believe them and therefore do not publish them.
 
-We can see from Fig. @ref(fig:TL2) The impact of ocean acidification studies on fish behaviour has declined. In this plot, we can see that there does seem to be a clear negative correlation between lnRR and year. Effect size magnitudes (lnRR) in this area have been declining over the past decade, with a large number of effect size magnitudes >5 in 2010-2014 and mostly <3 after 2015. average effect size magnitudes in early studies were too large, hovering at moderate effect sizes from 2012 to 2014 and almost disappeared in recent years.These early studies appear to have a far higher effect size compared with studies that are done in later years.In the early studies, the large effects of the great effect on acidification and fish behavior have not appeared in most of the past five years.
+We can see from Fig. \@ref(fig:TL2) The impact of ocean acidification studies on fish behaviour has declined. In this plot, we can see that there does seem to be a clear negative correlation between lnRR and year. Effect size magnitudes (lnRR) in this area have been declining over the past decade, with a large number of effect size magnitudes >5 in 2010-2014 and mostly <3 after 2015. average effect size magnitudes in early studies were too large, hovering at moderate effect sizes from 2012 to 2014 and almost disappeared in recent years.These early studies appear to have a far higher effect size compared with studies that are done in later years.In the early studies, the large effects of the great effect of acidification on  fish behavior have not appeared in most of the past five years.
 
-Based on the above two points, we can get Two other publication bias maybe reflected here. First, Methodological biases. Experiments with small sample sizes are more prone to statistical error, and studies with large sample sizes should be more trustworthy than those with small sample sizes, but in the data used for this assignment, almost all studies with maximum effect sizes had relatively low average sample sizes (below 30 fish). Second, Publication and citation bias. At the beginning of this field, the results of showing strong effects are often easier to publish than research that displayed weaker or invalid results, and published on magazines that have a greater impact. The author and journal articles with optional publications may help the spread of the research and continuous existence of the strong effect of this report. Even if these effects may not be true due to low samples or other reasons.
+Based on the above two points, we can get Two other publication bias maybe reflected here. First, Methodological biases. Experiments with small sample sizes are more prone to statistical error, and studies with large sample sizes should be more trustworthy than those with small sample sizes, but in the data used for this assignment, almost all studies with maximum effect sizes had relatively low average sample sizes (below 30 fish). Second, Publication and citation bias. At the beginning of this field, the results of showing strong effects are often easier to publish than research that displayed weaker or invalid results, and published on magazines that have a greater impact. The author and journal articles with optional publications may help the spread of the research and continuous existence of the strong effect of this field. Even if these effects may not be true due to low samples or other reasons.
 
-Time-lag explains `r r2_A[1]*100%` of the variation in lnRR. Since it is small, it is not reflected we have evidence of a time-lag bias.
+Time-lag explains `r r2_A[1]` of the variation in lnRR. Since it is small, it is not reflected we have evidence of a time-lag bias.
 
 ### 12.Identify any studies contributing to publication bias. How do your updated meta-analysis results compare with a meta-analysis by Clement et. al. (2022)? Are there any concerns about these studies? If so, describe using references to existing papers what concerns have been raised?
 
 #### Identify studies contributing to publication bias.
 
-We can see from Fig. @ref(fig:TL2). A large number of studies prior to 2012 had effect sizes >5, and after 2015 were mostly <3. The average effect size was too large for earlier studies, which appeared to have higher effect sizes than studies done later in life. In earlier studies, large effects on acidification and fish behavior were absent for most of the past five years. Therefore, it is possible that these studies have caused publication bias, and we will delete the data before 2012.
+We can see from Fig. \@ref(fig:TL2). A large number of studies prior to 2012 had effect sizes >5, and after 2015 were mostly <3. The average effect size was too large for earlier studies, which appeared to have higher effect sizes than studies done later in life. In earlier studies, large effects on acidification and fish behavior were absent for most of the past five years. Therefore, it is possible that these studies have caused publication bias, and we will delete the data before 2012.
 
-```{r IS, fig.cap= The impact of marine acidization research on the decline in fish behavior (not included in the study before 2011.)}
+```{r IS, fig.cap= "The impact of marine acidization research on the decline in fish behavior (not included in the study before 2011.)"}
 IS_rom_data <- rom_data %>% filter( Year..print.> 2011)
 ggplot(IS_rom_data, aes(y = lnRR, x = Year..print., size = sqrt(1/V_lnRR))) + geom_point(alpha = 0.3) +
     geom_smooth(method = lm, col = "red", show.legend = FALSE) + labs(x = "Publication Year",
@@ -242,9 +244,9 @@ ggplot(IS_rom_data, aes(y = lnRR, x = Year..print., size = sqrt(1/V_lnRR))) + ge
     theme_classic()
 ```
 
-We can see from Fig. @ref(fig:IS). After removing studies before 2012, the decline effect from 2012 to 2019 is no longer significant, from which we can conclude that studies with higher effect size before 2012 may have contributed to some of the publication bias.
+We can see from Fig. \@ref(fig:IS). After removing studies before 2012, the decline effect from 2012 to 2019 is no longer significant, from which we can conclude that studies with higher effect size before 2012 may have contributed to some of the publication bias.
 
-We can see from Fig.(@ref(fig:po2)). If we do not filter the sampling Variance of lnRR, we find two extremely large value of variance that significantly pulls down the slope, which has a great impact to the slope and distribution of effect sizes.We can conclude that studies with extremely large value of variance may have contributed to some of the publication bias.
+We can see from Fig. \@ref(fig:po2). If we do not filter the sampling Variance of lnRR, we find two extremely large value of variance that significantly pulls down the slope, which has a great impact to the slope and distribution of effect sizes.We can conclude that studies with extremely large value of variance may have contributed to some of the publication bias.
 
 #### My meta-analysis results compare with a meta-analysis by Clement et. al. (2022)
 
